@@ -6,8 +6,8 @@ import time
 import pygame as pg
 
 
-WIDTH = 1100  # ゲームウィンドウの幅
-HEIGHT = 650  # ゲームウィンドウの高さ
+WIDTH = 1100
+HEIGHT = 650
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -171,7 +171,7 @@ class Score:
     def __init__(self):
         self.font = pg.font.Font(None, 50)
         self.color = (0, 0, 255)
-        self.value = 99990
+        self.value = 0
         self.image = self.font.render(f"Score: {self.value}", 0, self.color)
         self.rect = self.image.get_rect()
         self.rect.center = 100, HEIGHT-50
@@ -243,6 +243,25 @@ class Gravity(pg.sprite.Sprite):
         if self.life < 0:
             self.kill()
 
+class Shield(pg.sprite.Sprite):
+    def __init__(self, bird: Bird, life: int):
+        super().__init__()
+        self.life = life
+        self.image = pg.Surface((20, bird.rect.height * 2))
+        pg.draw.rect(self.image, (0, 0, 255), (0, 0, 20, bird.rect.height * 2))
+        self.image.set_colorkey((0, 0, 0))
+        vx, vy = bird.dire
+        angle = math.degrees(math.atan2(-vy, vx))
+        self.image = pg.transform.rotozoom(self.image, angle, 1.0)
+        self.rect = self.image.get_rect()
+        self.rect.centerx = bird.rect.centerx + bird.rect.width * vx
+        self.rect.centery = bird.rect.centery + bird.rect.height * vy
+
+    def update(self):
+        self.life -= 1
+        if self.life < 0:
+            self.kill()
+
 class EMP:
     """
     電磁パルス（EMP）: 発動時に存在する敵機と爆弾を無効化する
@@ -264,6 +283,7 @@ class EMP:
         pg.display.update()
         time.sleep(0.05)
         
+
 def main():
     pg.display.set_caption("真！こうかとん無双")
     screen = pg.display.set_mode((WIDTH, HEIGHT))
@@ -278,6 +298,7 @@ def main():
     emys = pg.sprite.Group()
     muteki = pg.sprite.Group()
     gravities = pg.sprite.Group()
+    shields = pg.sprite.Group()
 
     tmr = 0
     clock = pg.time.Clock()
@@ -311,6 +332,10 @@ def main():
                     score.value -= 20
                     EMP(emys, bombs, screen)
                 
+                if event.key == pg.K_s and score.value >= 50 and len(shields) == 0:
+                    score.value -= 50
+                    shields.add(Shield(bird, 400))
+
         screen.blit(bg_img, [0, 0])
 
         if tmr%200 == 0:
@@ -359,6 +384,19 @@ def main():
             if hasattr(bomb, "state") and bomb.state == "inactive":
                 continue
             bird.change_img(8, screen)  # こうかとん悲しみエフェクト
+        for emy in pg.sprite.groupcollide(emys, beams, True, True).keys():
+            exps.add(Explosion(emy, 100))
+            score.value += 10
+            bird.change_img(6, screen)
+
+        for bomb in pg.sprite.groupcollide(bombs, beams, True, True).keys():
+            exps.add(Explosion(bomb, 50))
+            score.value += 1
+
+        pg.sprite.groupcollide(bombs, shields, True, False)
+
+        for bomb in pg.sprite.spritecollide(bird, bombs, True):
+            bird.change_img(8, screen)
             score.update(screen)
             pg.display.update()
             time.sleep(2)
@@ -375,6 +413,8 @@ def main():
         gravities.draw(screen)
         exps.update()
         exps.draw(screen)
+        shields.update()
+        shields.draw(screen)
         score.update(screen)
         life.update(screen)  # ライフの更新と描画
         pg.display.update()
