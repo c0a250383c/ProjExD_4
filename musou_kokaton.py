@@ -172,7 +172,7 @@ class Score:
     def __init__(self):
         self.font = pg.font.Font(None, 50)
         self.color = (0, 0, 255)
-        self.value = 1000
+        self.value = 0
         self.image = self.font.render(f"Score: {self.value}", 0, self.color)
         self.rect = self.image.get_rect()
         self.rect.center = 100, HEIGHT-50
@@ -190,6 +190,41 @@ class Muteki:
     def __init__(self, muteki: int):
         super().__init__()
         self.muteki = muteki
+        
+
+# --- 追加機能：Lifeクラス ---
+class Life:
+    """
+    残機数（ライフ）に関するクラス
+    """
+    def __init__(self, num: int):
+        """
+        初期残機数の設定とハート画像の生成
+        """
+        self.num = num
+        # 40x40の空のSurfaceを作成
+        self.image = pg.Surface((40, 40))
+        self.image.set_colorkey((0, 0, 0)) # 黒を透過
+        
+        # ハートの描き方の数式
+        points = [
+            (16 * math.sin(t / 100) ** 3 + 20,
+             -(13 * math.cos(t / 100) - 5 * math.cos(2 * t / 100) - 2 * math.cos(3 * t / 100) - math.cos(4 * t / 100)) + 20)
+            for t in range(0, 628)
+        ]
+        # 赤色のハートをdraw
+        pg.draw.polygon(self.image, (255, 0, 0), points)
+
+    def update(self, screen: pg.Surface):
+        """
+        ハートが描かれたsurfaceをnum個blitする
+        """
+        for i in range(self.num):
+            # 画面右下（右から50, 下から50）を基準に描画
+            x = WIDTH - 50 - (i * 45) 
+            y = HEIGHT - 50
+            screen.blit(self.image, [x - 20, y - 20])
+
         
 
 class Gravity(pg.sprite.Sprite):
@@ -215,6 +250,7 @@ def main():
     screen = pg.display.set_mode((WIDTH, HEIGHT))
     bg_img = pg.image.load(f"fig/pg_bg.jpg")
     score = Score()
+    life = Life(3)  # 初期残機数：3
 
     bird = Bird(3, (900, 400))
     bombs = pg.sprite.Group()
@@ -277,7 +313,7 @@ def main():
         for bomb in pg.sprite.groupcollide(bombs, beams, True, True).keys():
             exps.add(Explosion(bomb, 50))
             score.value += 1
-
+            
         # こうかとんと爆弾の衝突判定
         for bomb in pg.sprite.spritecollide(bird, bombs, True):
             if bird.state == "hyper":
@@ -285,12 +321,16 @@ def main():
                 exps.add(Explosion(bomb, 50)) # 爆発エフェクトを出す
                 score.value += 1
             else:
-                # 通常モード：ゲームオーバー
+                life.num -= 1  # 爆弾に当たるたびに1減らす
                 bird.change_img(8, screen)
-                score.update(screen)
-                pg.display.update()
-                time.sleep(2)
-                return
+                
+                if life.num < 0:  # 残機数が0になるまで死なない
+                    # 通常モード：ゲームオーバー
+                    bird.change_img(8, screen)
+                    score.update(screen)
+                    pg.display.update()
+                    time.sleep(2)
+                    return
 
         bird.update(key_lst, screen)
         beams.update()
@@ -304,6 +344,7 @@ def main():
         exps.update()
         exps.draw(screen)
         score.update(screen)
+        life.update(screen)  # ライフの更新と描画
         pg.display.update()
         tmr += 1
         clock.tick(50)
